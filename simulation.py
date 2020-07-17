@@ -53,20 +53,22 @@ class Simulation:
                                 forklift.update_travel_time(t)
                             job_ticker += 1
                             #print("Time: ", t, " Jobs Completed: ", job_ticker - self.n_forklifts, " Total Jobs: ", len(self.forklift_job_lists))
-                output = output.append([[t, 
-                                         name, 
-                                         forklift.position,
-                                         forklift.prev_position, 
-                                         forklift.status,
-                                         forklift.next_update_time]])
-            
-            t += 1
-        output.columns = ['time',
-                          'name',
-                          'current_destination',
-                          'last_loc',
-                          'status',
-                          'next_update_time']
-        output.to_csv(outputfile, index=False)
-        print("simulation complete, total time = ",t)
+                if self.output_to_csv == True:
+                    output = output.append([[t, 
+                                             name, 
+                                             forklift.position,
+                                             forklift.prev_position, 
+                                             forklift.status,
+                                             forklift.next_update_time]])
+
+            t += 1 # for name in self.forklift_names:
+        if self.output_to_csv == True:
+            output.columns = ['time',
+                              'name',
+                              'current_destination',
+                              'last_loc',
+                              'status',
+                              'next_update_time']
+            output.to_csv(outputfile, index=False)
+        #print("simulation complete, total time = ",t)
         return t # return the total time spent for this run
