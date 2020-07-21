@@ -1,13 +1,13 @@
 import pandas as pd
 from components import Warehouse, Forklift
+from greedy_engine_naive import Greedy_engine_naive
 """
     New features (newer things last):
     1. Added switch var output_to_csv = True to decide whether to output a csv file
     2. Added switch var if_print = True to decide whether to print running progress
     3. Added a return on each run for the time steps taken
     4. Added the last recorded location to the output data
-    5. Added a job assignment list argument: e.g. [4,8,3,...] means 0th job goes to FL4, 1st to FL8 etc.
-    Has the length of forklift_job_list.
+    5. Uses a greedy engine to assign the next job
 """
 class Simulation:
     def __init__(self, warehouse_x_dim, warehouse_y_dim, 
@@ -22,14 +22,27 @@ class Simulation:
         self.warehouse = Warehouse(warehouse_x_dim, warehouse_y_dim, receiving, shipping, lab)
         self.forklift_names=[]
         self.forklift_job_lists=forklift_job_lists
-        self.job_assign_list = job_assign_list # [0]*len(forklift_job_lists) 
+        self.job_assign_list =  list(range(len(forklift_job_lists))) #job_assign_list
         self.output_to_csv = output_to_csv # if output a csv file. default = True
         self.if_print = if_print # if print job number completed. default = True
+        self.job_avai_bl = [True for i in range(self.n_jobs)] # everywork is available in the beginning
+        
+        # create a job assigning engine: Greedy_engine
+        self.JAE = Greedy_engine_naive(warehouse_dim = warehouse_x_dim, 
+                                                 n_forklifts = self.n_forklifts,
+                                                 receiving = receiving,
+                                                 shipping = shipping,
+                                                 lab = lab,
+                                                 job_list = self.forklift_job_lists,
+                                                 weight = 1)
+
         for k in range(self.n_forklifts):
-            job_first_occurr = job_assign_list.index(k)
+            job_first_occurr = self.job_assign_list.index(k)
             self.__setattr__('Forklift'+str(k), Forklift(self.forklift_start_positions[k], 
-                                                         forklift_job_lists[job_first_occurr]))
+                                                         self.forklift_job_lists[job_first_occurr]))
             self.forklift_names.append('Forklift'+str(k))
+            self.job_avai_bl[k] = False
+
             #print("Forklift", k, "is doing job",forklift_job_lists[job_first_occurr])
     # function that takes in forklift name, and job_ticker, returns the next job(in terms of index)
     # that the fork_lift should do.
@@ -44,23 +57,16 @@ class Simulation:
         return next_job_index
         
     """
-    intakes: forklift_name(mutable), 
-             which_job_has_been_done(mutable), 
-             entire_job_list(immutable),
-             forklift.position,
-             weight/preference
-            
     outlet: next job's index, which is the closest
     
     goal: pick the next job that is the closest 
     """
         
-        
     def run(self, outputfile):
         output = pd.DataFrame()
         t = 0
         job_ticker = self.n_forklifts # the last job that has been assigned 
-        for name in self.forklift_names:
+        for name in self.forklift_names: # initial updates
             forklift = self.__getattribute__(name)
             forklift.update_travel_time(t)
         while job_ticker < len(self.forklift_job_lists) + self.n_forklifts: 
@@ -76,18 +82,25 @@ class Simulation:
                     elif forklift.status == 'picking':
                         self.warehouse.__getattribute__(str(forklift.position)).remove_forklift()
                         forklift.update_travel_time(t)
-                        if forklift.status == 'complete':
+                        if forklift.status == 'complete':   
                             if self.if_print == True: # print job number completed
                                 print("number of ",job_ticker - self.n_forklifts + 1,"jobs completed!")
-                            if (job_ticker - self.n_forklifts + 1) < len(self.forklift_job_lists):
-                                job_index = self.assign_job(name, _n_job_done = job_ticker - self.n_forklifts + 1) #
+                            if (job_ticker - self.n_forklifts + 1) < len(self.forklift_job_lists): # still job available
+                                [job_index, self.job_avai_bl] = self.JAE.next_job_index(_current_pos = forklift.position,
+                                                                _job_avai_bl = self.job_avai_bl) #
+                                #print('t, forklift.next_update_time, forklift.status',
+                                      #t, forklift.next_update_time, forklift.status)
                                 if job_index == None:
-                                    continue
+                                    #job_ticker += 1
+                                    forklift.job_number = 0
+                                    #forklift.update_travel_time(t)
+                                    #continue
                                 else:
                                     #print("job_index", job_index, "job_done", job_ticker - self.n_forklifts + 1)
                                     forklift.job_list = self.forklift_job_lists[job_index] #
                                     #print(name, "currently doing", forklift.job_list)
                                     forklift.job_number = 0
+                                    
                                     forklift.update_travel_time(t)
                             #print("job_ticker now", job_ticker)
                             #print("forklift info", name)
