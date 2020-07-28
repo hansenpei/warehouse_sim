@@ -13,7 +13,7 @@ class Simulation:
     def __init__(self, warehouse_x_dim, warehouse_y_dim, 
                  receiving, shipping, lab, n_forklifts, 
                  forklift_job_lists, job_assign_list = None, # dummy value here
-                output_to_csv = True, if_print = False):
+                output_to_csv = False, if_print = False):
         if len(forklift_job_lists) < n_forklifts:
             raise "Need at least as many jobs as forklifts"
         self.n_forklifts = n_forklifts
@@ -69,14 +69,19 @@ class Simulation:
     def run(self, outputfile = None):
         output = pd.DataFrame()
         t = 0
-        job_ticker = self.n_forklifts # the last job that has been assigned 
+        job_ticker = self.n_forklifts # the last job that has been assigned
+        #job_done = self.n_forklifts
         for name in self.forklift_names:
             forklift = self.__getattribute__(name)
             forklift.update_travel_time(t)
-        while job_ticker < len(self.forklift_job_lists): 
+        #time_end = {name: False for name in self.forklift_names} # whether the current time is no less than the next update times
+        #terminate = sum(time_end.values())
+        while job_ticker < len(self.forklift_job_lists) + self.n_forklifts: 
+            
             for name in self.forklift_names:
                 forklift = self.__getattribute__(name)
                 if forklift.next_update_time <= t:
+                    #time_end[name] = F
                     if (forklift.status == 'traveling') or (forklift.status == 'waiting'):
                         if self.warehouse.__getattribute__(str(forklift.position)).occupied == 0:
                             self.warehouse.__getattribute__(str(forklift.position)).add_forklift()
@@ -87,25 +92,25 @@ class Simulation:
                         self.warehouse.__getattribute__(str(forklift.position)).remove_forklift()
                         forklift.update_travel_time(t)
                         if forklift.status == 'complete':
+                            #job_done += 1
                             if self.if_print == True: # print job number completed
                                 print("number of ",job_ticker,"jobs completed!")
-                            if job_ticker < len(self.forklift_job_lists):
+                            if True:#job_ticker < len(self.forklift_job_lists):
                                 job_index = self._assign_job(name) #
                                 if job_index == None:
-                                    continue
+                                    forklift.update_travel_time(t) 
                                 else:
                                     #print("job_index", job_index, "job_done", job_ticker - self.n_forklifts + 1)
-                                    job_ticker += 1
+                                    #job_ticker += 1
                                     forklift.job_list = self.forklift_job_lists[job_index] #
                                     #print(name, "starts doing", job_index)
                                     forklift.job_number = 0
                                     forklift.update_travel_time(t)
                                     
-                            #print("job_ticker now", job_ticker)
+                            print("job_ticker now", job_ticker)
+                            #print("job_done now", job_done)
                             #print("job dict", self.job_dict)
-                            
-                            
-                            
+                            job_ticker += 1
                 ###############################################################                                       
                 # Output part. This part is slow due to storing data. 
                 if self.output_to_csv == True:
@@ -117,6 +122,10 @@ class Simulation:
                                              forklift.next_update_time]])
 
             t += 1 # for name in self.forklift_names:
+            #terminate = sum(time_end.values())
+            #print('terminate', terminate)
+            #for value in time_end.values():
+                
         if self.output_to_csv == True:
             output.columns = ['time',
                               'name',
